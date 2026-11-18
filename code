@@ -1,0 +1,184 @@
+package com.priyanshu.cse226a
+
+
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import androidx.room.*
+import kotlinx.coroutines.launch
+
+
+
+@Entity(tableName = "tasks")
+data class TaskEntity(
+    @PrimaryKey(autoGenerate = true)
+    val id: Int = 0,
+    val name: String,
+    val age: String
+)
+
+
+@Dao
+interface TaskDao {
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertTask(task: TaskEntity)
+}
+
+
+@Database(
+    entities = [TaskEntity::class],
+    version = 1,
+    exportSchema = false
+)
+abstract class TaskDatabase : RoomDatabase() {
+
+    abstract fun taskDao(): TaskDao
+}
+
+
+
+class TaskViewModel(
+    private val taskDao: TaskDao
+) : ViewModel() {
+
+    fun saveTask(title: String, description: String) {
+
+        if (title.isBlank()) return
+
+        viewModelScope.launch {
+
+            val task = TaskEntity(
+                name = title,
+                age = description
+            )
+
+            taskDao.insertTask(task)
+        }
+    }
+}
+
+
+@Composable
+fun TaskScreen(
+    title: String,
+    description: String,
+    onTitleChange: (String) -> Unit,
+    onDescriptionChange: (String) -> Unit,
+    onSaveClick: () -> Unit
+) {
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+
+        Text(
+            text = "Enter the task",
+            style = MaterialTheme.typography.headlineMedium
+        )
+
+        OutlinedTextField(
+            value = title,
+            onValueChange = onTitleChange,
+            label = { Text("Enter your name") },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        OutlinedTextField(
+            value = description,
+            onValueChange = onDescriptionChange,
+            label = { Text("Enter your age") },
+            modifier = Modifier.fillMaxWidth(),
+            minLines = 3
+        )
+
+        Button(
+            onClick = onSaveClick,
+            modifier = Modifier.fillMaxWidth(),
+            enabled = title.isNotBlank()
+        ) {
+            Text("Save Task")
+        }
+    }
+}
+
+
+
+@Composable
+fun TaskRoute(
+    viewModel: TaskViewModel
+) {
+
+
+
+    var title by remember {
+        mutableStateOf("")
+    }
+
+    var description by remember {
+        mutableStateOf("")
+    }
+
+    TaskScreen(
+        title = title,
+        description = description,
+
+        onTitleChange = {
+            title = it
+        },
+
+        onDescriptionChange = {
+            description = it
+        },
+
+        onSaveClick = {
+
+            viewModel.saveTask(
+                title = title,
+                description = description
+            )
+
+
+            title = ""
+            description = ""
+        }
+    )
+}
+class MainActivity : ComponentActivity() {
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+
+        val database = Room.databaseBuilder(
+            applicationContext,
+            TaskDatabase::class.java,
+            "task_database"
+        ).build()
+
+
+        val viewModel = TaskViewModel(
+            database.taskDao()
+        )
+
+        setContent {
+
+            MaterialTheme {
+
+                TaskRoute(
+                    viewModel = viewModel
+                )
+            }
+        }
+    }
+}
